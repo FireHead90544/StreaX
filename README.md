@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![StreaX Logo](https://raw.githubusercontent.com/FireHead90544/streax/main/public/icon-512.png)
+<img src="https://raw.githubusercontent.com/FireHead90544/streax/main/public/icon-512.png" alt="StreaX Logo" width="128" height="128">
 
 **Track your productivity. Build streaks. Stay consistent.**
 
