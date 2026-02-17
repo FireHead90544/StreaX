@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { hasCompletedOnboarding } from "@/lib/storage";
 import { Navbar } from "@/components/layout/Navbar";
+import { requestNotificationPermission, scheduleDailyReminder } from "@/lib/notifications";
 import Link from "next/link";
 
 export function ClientLayout({ children }: { children: React.ReactNode }) {
@@ -21,6 +22,16 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
         }
 
         setIsLoading(false);
+
+        // Request notification permission and schedule daily reminders
+        if (completed) {
+            requestNotificationPermission().then((granted) => {
+                if (granted) {
+                    scheduleDailyReminder();
+                    console.log("Daily reminder notifications scheduled");
+                }
+            });
+        }
     }, [pathname, router]);
 
     if (isLoading) {
