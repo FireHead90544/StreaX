@@ -11,7 +11,6 @@ import { Card } from "@/components/retroui/Card";
 import { Text } from "@/components/retroui/Text";
 import { Button } from "@/components/retroui/Button";
 import { Input } from "@/components/retroui/Input";
-import { Select } from "@/components/retroui/Select";
 import { Badge } from "@/components/retroui/Badge";
 import { Dialog } from "@/components/retroui/Dialog";
 import Link from "next/link";
@@ -289,8 +288,15 @@ export default function PomodoroPage() {
 
     const stopSession = () => {
         setShowEndDialog(true);
-        const completedMinutes = Math.floor((PRESETS[selectedPreset].focusMinutes * 60 - timeRemaining) / 60);
-        setPartialMinutes(completedMinutes);
+
+        // If in break phase, focus is already complete - log full focus time
+        if (phase === "break") {
+            setPartialMinutes(totalFocusTime);
+        } else {
+            // In focus or paused phase, calculate actual time spent
+            const completedMinutes = Math.floor((PRESETS[selectedPreset].focusMinutes * 60 - timeRemaining) / 60);
+            setPartialMinutes(completedMinutes);
+        }
     };
 
     const completeSession = (partial: boolean = false) => {
