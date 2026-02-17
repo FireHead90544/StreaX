@@ -10,7 +10,7 @@ import { Button } from "@/components/retroui/Button";
 import { Badge } from "@/components/retroui/Badge";
 import { Input } from "@/components/retroui/Input";
 import { Textarea } from "@/components/retroui/Textarea";
-import { LineChart } from "@/components/charts/LineChart";
+import { AreaChart } from "@/components/retroui/charts/AreaChart";
 import Link from "next/link";
 
 type TimeFrame = "day" | "week" | "month" | "all" | "custom";
@@ -434,17 +434,16 @@ export default function InsightsPage() {
                                     </Text>
                                 </div>
                             ) : (
-                                <LineChart
+                                <AreaChart
                                     data={stats.logs.map(log => ({
-                                        label: new Date(log.date).toLocaleDateString('en-US', {
+                                        name: new Date(log.date).toLocaleDateString('en-US', {
                                             month: 'short',
                                             day: 'numeric'
                                         }),
-                                        value: log.productiveMinutes / 60,
+                                        hours: log.productiveMinutes / 60,
                                     }))}
-                                    height={250}
-                                    showPoints={true}
-                                    fillArea={true}
+                                    index="name"
+                                    categories={["hours"]}
                                 />
                             )}
                         </Card>
