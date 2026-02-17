@@ -31,6 +31,17 @@ const PRESETS: SessionPreset[] = [
 
 type TimerPhase = "idle" | "focus" | "break" | "paused";
 
+type PersistedTimerState = {
+    phase: TimerPhase;
+    timeRemaining: number;
+    totalFocusTime: number;
+    taskName: string;
+    selectedPreset: number;
+    sessionStartTime: string | null;
+    pausedTime: number;
+    lastUpdate: number;
+};
+
 export default function PomodoroPage() {
     const router = useRouter();
     const [appData, setAppData] = useState<AppData | null>(null);
@@ -52,6 +63,76 @@ export default function PomodoroPage() {
     const intervalRef = useRef<NodeJS.Timeout | null>(null);
     const audioRef = useRef<HTMLAudioElement | null>(null);
 
+    // Timer persistence utilities
+    const TIMER_STATE_KEY = "streax-pomodoro-state";
+    const MAX_STATE_AGE = 24 * 60 * 60 * 1000; // 24 hours
+
+    const saveTimerState = () => {
+        if (typeof window === "undefined") return;
+
+        const state: PersistedTimerState = {
+            phase,
+            timeRemaining,
+            totalFocusTime,
+            taskName,
+            selectedPreset,
+            sessionStartTime: sessionStartTime?.toISOString() || null,
+            pausedTime,
+            lastUpdate: Date.now(),
+        };
+
+        try {
+            localStorage.setItem(TIMER_STATE_KEY, JSON.stringify(state));
+        } catch (error) {
+            console.error("Failed to save timer state:", error);
+        }
+    };
+
+    const loadTimerState = (): PersistedTimerState | null => {
+        if (typeof window === "undefined") return null;
+
+        try {
+            const saved = localStorage.getItem(TIMER_STATE_KEY);
+            if (!saved) return null;
+
+            const state: PersistedTimerState = JSON.parse(saved);
+
+            // Validate state age (don't restore timers older than 24 hours)
+            const age = Date.now() - state.lastUpdate;
+            if (age > MAX_STATE_AGE) {
+                clearTimerState();
+                return null;
+            }
+
+            // Calculate time drift if timer was running
+            if (state.phase === "focus" || state.phase === "break") {
+                const elapsedSeconds = Math.floor(age / 1000);
+                state.timeRemaining = Math.max(0, state.timeRemaining - elapsedSeconds);
+
+                // If time expired while away, mark as complete
+                if (state.timeRemaining === 0) {
+                    clearTimerState();
+                    return null;
+                }
+            }
+
+            return state;
+        } catch (error) {
+            console.error("Failed to load timer state:", error);
+            clearTimerState();
+            return null;
+        }
+    };
+
+    const clearTimerState = () => {
+        if (typeof window === "undefined") return;
+        try {
+            localStorage.removeItem(TIMER_STATE_KEY);
+        } catch (error) {
+            console.error("Failed to clear timer state:", error);
+        }
+    };
+
     useEffect(() => {
         const data = loadAppData();
         if (data) {
@@ -63,6 +144,18 @@ export default function PomodoroPage() {
         // Create audio element for notifications
         if (typeof window !== "undefined") {
             audioRef.current = new Audio();
+        }
+
+        // Restore timer state if available
+        const savedState = loadTimerState();
+        if (savedState) {
+            setPhase(savedState.phase);
+            setTimeRemaining(savedState.timeRemaining);
+            setTotalFocusTime(savedState.totalFocusTime);
+            setTaskName(savedState.taskName);
+            setSelectedPreset(savedState.selectedPreset);
+            setSessionStartTime(savedState.sessionStartTime ? new Date(savedState.sessionStartTime) : null);
+            setPausedTime(savedState.pausedTime);
         }
 
         return () => {
@@ -94,6 +187,15 @@ export default function PomodoroPage() {
             }
         };
     }, [phase]);
+
+    // Save timer state whenever it changes
+    useEffect(() => {
+        if (phase === "idle") {
+            clearTimerState();
+        } else {
+            saveTimerState();
+        }
+    }, [phase, timeRemaining, taskName, selectedPreset, totalFocusTime, sessionStartTime, pausedTime]);
 
     const playNotificationSound = () => {
         // Simple beep using oscillator
