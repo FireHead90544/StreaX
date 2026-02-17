@@ -22,7 +22,6 @@ type SessionPreset = {
 };
 
 const PRESETS: SessionPreset[] = [
-    { name: "Test", focusMinutes: 1, breakMinutes: 1 },
     { name: "Classic (25/5)", focusMinutes: 25, breakMinutes: 5 },
     { name: "Extended (50/10)", focusMinutes: 50, breakMinutes: 10 },
     { name: "Long (120/20)", focusMinutes: 120, breakMinutes: 20 },
