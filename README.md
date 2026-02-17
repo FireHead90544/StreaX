@@ -41,12 +41,14 @@
   - **Streak Savers**: Skip a day without breaking your streak (earn every 7 days)
   - **Backlog Savers**: Convert unused daily minutes into emergency reserves
 - **Milestones**: Unlock rewards at 7, 30, 100, 365, and 1000 days
+- **System Notifications**: Get daily reminders at 9 AM and evening goal checks at 7 PM
 
 ### ⏱️ Pomodoro Timer
 
 - Fully customizable work/break intervals
 - Preset configurations (25/5, 50/10, 90/15)
 - Session history with notes
+- **Smart Persistence**: Timer continues even if you navigate away or close the tab
 - Today's progress tracking
 - Visual timer with retro design
 
@@ -54,6 +56,7 @@
 
 - **This Day** view with detailed stats
 - **This Week/Month/All** time aggregations
+- **Interactive Charts**: Beautiful Area Charts powered by **Retro UI**
 - Hour-by-hour breakdown
 - Daily notes and session logs
 - Completion rate tracking
@@ -146,7 +149,9 @@ npm start
 - **React 19** - UI library
 - **TypeScript 5** - Type safety
 - **Tailwind CSS 3** - Utility-first styling
-- **Retro UI** - Custom retro UI components (custom shadcn registry)
+- **Tailwind CSS 3** - Utility-first styling
+- **Retro UI** - Neo-brutalism components (@retroui)
+- **Recharts** - Composable charting library
 
 ### Features
 - **Service Workers** - Offline caching
