@@ -22,6 +22,7 @@ type SessionPreset = {
 };
 
 const PRESETS: SessionPreset[] = [
+    { name: "Test", focusMinutes: 1, breakMinutes: 1 },
     { name: "Classic (25/5)", focusMinutes: 25, breakMinutes: 5 },
     { name: "Extended (50/10)", focusMinutes: 50, breakMinutes: 10 },
     { name: "Long (120/20)", focusMinutes: 120, breakMinutes: 20 },
@@ -39,6 +40,8 @@ type PersistedTimerState = {
     sessionStartTime: string | null;
     pausedTime: number;
     lastUpdate: number;
+    pausedPhase: TimerPhase | null; // Track which phase was paused
+    endTime: number | null; // Target end time for accuracy
 };
 
 export default function PomodoroPage() {
@@ -54,6 +57,8 @@ export default function PomodoroPage() {
     const [totalFocusTime, setTotalFocusTime] = useState(0);
     const [sessionStartTime, setSessionStartTime] = useState<Date | null>(null);
     const [pausedTime, setPausedTime] = useState(0);
+    const [pausedPhase, setPausedPhase] = useState<TimerPhase | null>(null); // Track which phase was paused
+    const [endTime, setEndTime] = useState<number | null>(null); // Target end time for accuracy
 
     // Dialog state
     const [showEndDialog, setShowEndDialog] = useState(false);
@@ -78,6 +83,8 @@ export default function PomodoroPage() {
             sessionStartTime: sessionStartTime?.toISOString() || null,
             pausedTime,
             lastUpdate: Date.now(),
+            pausedPhase: phase === "paused" ? pausedPhase : null,
+            endTime: endTime
         };
 
         try {
@@ -103,13 +110,20 @@ export default function PomodoroPage() {
                 return null;
             }
 
-            // Calculate time drift if timer was running
+            // Resuming active timer logic
             if (state.phase === "focus" || state.phase === "break") {
-                const elapsedSeconds = Math.floor(age / 1000);
-                state.timeRemaining = Math.max(0, state.timeRemaining - elapsedSeconds);
+                // If we have an endTime, verify against it for accuracy
+                if (state.endTime) {
+                    const remaining = Math.ceil((state.endTime - Date.now()) / 1000);
+                    state.timeRemaining = Math.max(0, remaining);
+                } else {
+                    // Fallback to elapsed time if no endTime (legacy support)
+                    const elapsedSeconds = Math.floor(age / 1000);
+                    state.timeRemaining = Math.max(0, state.timeRemaining - elapsedSeconds);
+                }
 
-                // If time expired while away, mark as complete
-                if (state.timeRemaining === 0) {
+                // If time expired
+                if (state.timeRemaining <= 0) {
                     clearTimerState();
                     return null;
                 }
@@ -164,28 +178,45 @@ export default function PomodoroPage() {
         };
     }, []);
 
+    // Timer logic
     useEffect(() => {
-        if (phase === "focus" || phase === "break") {
+        if ((phase === "focus" || phase === "break") && !intervalRef.current) {
             intervalRef.current = setInterval(() => {
-                setTimeRemaining((prev) => {
-                    if (prev <= 1) {
+                if (endTime) {
+                    const now = Date.now();
+                    const remaining = Math.ceil((endTime - now) / 1000);
+                    const newTime = Math.max(0, remaining);
+
+                    setTimeRemaining(newTime);
+
+                    if (newTime <= 0) {
                         handlePhaseComplete();
-                        return 0;
                     }
-                    return prev - 1;
-                });
+                } else {
+                    // Fallback if endTime is missing
+                    setTimeRemaining((prev) => {
+                        if (prev <= 0) {
+                            handlePhaseComplete();
+                            return 0;
+                        }
+                        return prev - 1;
+                    });
+                }
             }, 1000);
-        } else if (intervalRef.current) {
-            clearInterval(intervalRef.current);
-            intervalRef.current = null;
+        } else if (phase === "idle" || phase === "paused") {
+            if (intervalRef.current) {
+                clearInterval(intervalRef.current);
+                intervalRef.current = null;
+            }
         }
 
         return () => {
             if (intervalRef.current) {
                 clearInterval(intervalRef.current);
+                intervalRef.current = null; // Important: clear ref
             }
         };
-    }, [phase]);
+    }, [phase, endTime]);
 
     // Save timer state whenever it changes
     useEffect(() => {
@@ -194,7 +225,7 @@ export default function PomodoroPage() {
         } else {
             saveTimerState();
         }
-    }, [phase, timeRemaining, taskName, selectedPreset, totalFocusTime, sessionStartTime, pausedTime]);
+    }, [phase, timeRemaining, taskName, selectedPreset, totalFocusTime, sessionStartTime, pausedTime, pausedPhase, endTime]);
 
     const playNotificationSound = () => {
         // Simple beep using oscillator
@@ -227,7 +258,9 @@ export default function PomodoroPage() {
         if (phase === "focus") {
             // Focus completed, move to break
             setPhase("break");
-            setTimeRemaining(PRESETS[selectedPreset].breakMinutes * 60);
+            const breakSeconds = PRESETS[selectedPreset].breakMinutes * 60;
+            setTimeRemaining(breakSeconds);
+            setEndTime(Date.now() + breakSeconds * 1000);
 
             // Notify
             if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
@@ -239,6 +272,8 @@ export default function PomodoroPage() {
         } else if (phase === "break") {
             // Break completed, session done
             setPhase("idle");
+            setPausedPhase(null);
+            setEndTime(null);
             completeSession();
 
             if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
@@ -256,10 +291,12 @@ export default function PomodoroPage() {
             return;
         }
 
+        const duration = PRESETS[selectedPreset].focusMinutes * 60;
         setPhase("focus");
-        setTimeRemaining(PRESETS[selectedPreset].focusMinutes * 60);
+        setTimeRemaining(duration);
         setSessionStartTime(new Date());
         setTotalFocusTime(PRESETS[selectedPreset].focusMinutes);
+        setEndTime(Date.now() + duration * 1000);
 
         // Request notification permission
         if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "default") {
@@ -270,33 +307,33 @@ export default function PomodoroPage() {
     const pauseSession = () => {
         if (phase === "focus" || phase === "break") {
             setPausedTime(timeRemaining);
+            setPausedPhase(phase);
             setPhase("paused");
+            setEndTime(null);
         }
     };
 
     const resumeSession = () => {
         if (phase === "paused") {
             setTimeRemaining(pausedTime);
-            // Determine which phase we were in
-            if (totalFocusTime > 0) {
-                setPhase("focus");
-            } else {
-                setPhase("break");
-            }
+            const nextPhase = pausedPhase || (totalFocusTime > 0 ? "focus" : "break");
+            setPhase(nextPhase);
+            setEndTime(Date.now() + pausedTime * 1000);
         }
     };
 
     const stopSession = () => {
-        setShowEndDialog(true);
-
-        // If in break phase, focus is already complete - log full focus time
+        // If in break phase, just finish the session (mark as complete)
         if (phase === "break") {
-            setPartialMinutes(totalFocusTime);
-        } else {
-            // In focus or paused phase, calculate actual time spent
-            const completedMinutes = Math.floor((PRESETS[selectedPreset].focusMinutes * 60 - timeRemaining) / 60);
-            setPartialMinutes(completedMinutes);
+            setPhase("idle");
+            completeSession(false); // Not partial - fully complete
+            return;
         }
+
+        setShowEndDialog(true);
+        // In focus or paused phase, calculate actual time spent
+        const completedMinutes = Math.floor((PRESETS[selectedPreset].focusMinutes * 60 - timeRemaining) / 60);
+        setPartialMinutes(completedMinutes);
     };
 
     const completeSession = (partial: boolean = false) => {
