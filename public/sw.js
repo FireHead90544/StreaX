@@ -1,19 +1,24 @@
-// Simple offline-first service worker
-const CACHE_NAME = "streax-v1";
+// Enhanced offline-first service worker with complete route coverage
+const CACHE_NAME = "streax-v2";
 const urlsToCache = [
     "/",
     "/pomodoro",
     "/insights",
     "/tips",
     "/settings",
+    "/notifications",
+    "/onboarding",
 ];
 
 self.addEventListener("install", (event) => {
     event.waitUntil(
         caches.open(CACHE_NAME).then((cache) => {
+            console.log("Service Worker: Caching app routes");
             return cache.addAll(urlsToCache);
         })
     );
+    // Force the waiting service worker to become the active service worker
+    self.skipWaiting();
 });
 
 self.addEventListener("fetch", (event) => {
@@ -23,7 +28,29 @@ self.addEventListener("fetch", (event) => {
             if (response) {
                 return response;
             }
-            return fetch(event.request);
+
+            // Clone the request
+            const fetchRequest = event.request.clone();
+
+            return fetch(fetchRequest).then((response) => {
+                // Check if valid response
+                if (!response || response.status !== 200 || response.type !== 'basic') {
+                    return response;
+                }
+
+                // Clone the response
+                const responseToCache = response.clone();
+
+                // Cache the fetched resource for future offline use
+                caches.open(CACHE_NAME).then((cache) => {
+                    cache.put(event.request, responseToCache);
+                });
+
+                return response;
+            }).catch(() => {
+                // Network failed, return offline page if available
+                return caches.match('/');
+            });
         })
     );
 });
@@ -35,10 +62,13 @@ self.addEventListener("activate", (event) => {
             return Promise.all(
                 cacheNames.map((cacheName) => {
                     if (cacheWhitelist.indexOf(cacheName) === -1) {
+                        console.log("Service Worker: Deleting old cache", cacheName);
                         return caches.delete(cacheName);
                     }
                 })
             );
         })
     );
+    // Take control of all pages immediately
+    return self.clients.claim();
 });
